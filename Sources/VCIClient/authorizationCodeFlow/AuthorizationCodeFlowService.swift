@@ -49,18 +49,29 @@ class AuthorizationCodeFlowService {
             session: session,
             dpopManager: dpopManager
         ) { token in
-            let proofs: CredentialRequestProofs
-            let nonce = try await nonceService.fetchNonce(issuerMetadata: issuerMetadata, timeoutInMillis: downloadTimeOutInMillis, dpopManager: dpopManager)
 
-            do {
-                proofs = try await getProofs(
-                    proofBindingContext.toCredentialRequestProofMetadata(
-                        credentialIssuer: issuerMetadata.credentialIssuer,
-                        nonce: nonce
-                    )
+            var proofs: CredentialRequestProofs? = nil
+
+            if !proofBindingContext.proofTypesSupported.isEmpty {
+
+                let nonce = try await nonceService.fetchNonce(
+                    issuerMetadata: issuerMetadata,
+                    timeoutInMillis: downloadTimeOutInMillis,
+                    dpopManager: dpopManager
                 )
-            } catch {
-                throw DownloadFailedException("Failed to obtain proofs from callback: \(error.localizedDescription)")
+
+                do {
+                    proofs = try await getProofs(
+                        proofBindingContext.toCredentialRequestProofMetadata(
+                            credentialIssuer: issuerMetadata.credentialIssuer,
+                            nonce: nonce
+                        )
+                    )
+                } catch {
+                    throw DownloadFailedException(
+                        "Failed to obtain proofs from callback: \(error.localizedDescription)"
+                    )
+                }
             }
 
             return try await self.credentialRequestExecutor.requestCredential(
@@ -102,23 +113,34 @@ class AuthorizationCodeFlowService {
             dpopManager: dpopManager
         ) { token in
 
-            let nonce = try NonceService.extractNonceFromTokenResponse(token)
-            let jwt: String
-            do {
-                jwt = try await getProofJwt(
-                    proofBindingContext.toCredentialRequestProofMetadata(
-                        credentialIssuer: issuerMetadata.credentialIssuer,
-                        nonce: nonce
+            var proof: JWTProof? = nil
+
+            if !proofBindingContext.proofTypesSupported.isEmpty {
+
+                let nonce = try NonceService.extractNonceFromTokenResponse(token)
+
+                let jwt: String
+
+                do {
+                    jwt = try await getProofJwt(
+                        proofBindingContext.toCredentialRequestProofMetadata(
+                            credentialIssuer: issuerMetadata.credentialIssuer,
+                            nonce: nonce
+                        )
                     )
-                )
-            } catch {
-                throw DownloadFailedException("Failed to obtain proof JWT from callback: \(error.localizedDescription)")
+                } catch {
+                    throw DownloadFailedException(
+                        "Failed to obtain proof JWT from callback: \(error.localizedDescription)"
+                    )
+                }
+
+                proof = JWTProof(jwt: jwt)
             }
 
             return try await self.credentialRequestExecutor.requestCredentialDraft13(
                 issuerMetadata: issuerMetadata,
                 credentialConfigurationId: credentialConfigurationId,
-                proof: JWTProof(jwt: jwt),
+                proof: proof,
                 accessToken: token.accessToken,
                 timeoutInMillis: downloadTimeOutInMillis,
                 session: session,

@@ -39,17 +39,28 @@ class PreAuthCodeFlowService {
             downloadTimeoutInMillis: downloadTimeoutInMillis,
             dpopManager: dpopManager
         ) { token in
-            let proofs: CredentialRequestProofs
-            let nonce = try await nonceService.fetchNonce(issuerMetadata: issuerMetadata, timeoutInMillis: downloadTimeoutInMillis, dpopManager: dpopManager)
-            do {
-                proofs = try await getProofs(
-                    proofBindingContext.toCredentialRequestProofMetadata(
-                        credentialIssuer: issuerMetadata.credentialIssuer,
-                        nonce: nonce
-                    )
+
+            var proofs: CredentialRequestProofs? = nil
+
+            if !proofBindingContext.proofTypesSupported.isEmpty {
+                let nonce = try await nonceService.fetchNonce(
+                    issuerMetadata: issuerMetadata,
+                    timeoutInMillis: downloadTimeoutInMillis,
+                    dpopManager: dpopManager
                 )
-            } catch {
-                throw DownloadFailedException("Failed to obtain proofs from callback: \(error.localizedDescription)")
+
+                do {
+                    proofs = try await getProofs(
+                        proofBindingContext.toCredentialRequestProofMetadata(
+                            credentialIssuer: issuerMetadata.credentialIssuer,
+                            nonce: nonce
+                        )
+                    )
+                } catch {
+                    throw DownloadFailedException(
+                        "Failed to obtain proofs from callback: \(error.localizedDescription)"
+                    )
+                }
             }
 
             return try await self.credentialExecutor.requestCredential(
@@ -75,6 +86,7 @@ class PreAuthCodeFlowService {
         downloadTimeoutInMillis: Int64 = Constants.defaultNetworkTimeoutInMillis,
         dpopManager: DPoPManager = DPoPManager()
     ) async throws -> CredentialResponseDraft13 {
+
         let response = try await executeRequestCredentials(
             issuerMetadata: issuerMetadata,
             credentialOffer: credentialOffer,
@@ -85,23 +97,35 @@ class PreAuthCodeFlowService {
             downloadTimeoutInMillis: downloadTimeoutInMillis,
             dpopManager: dpopManager
         ) { token in
-            let nonce = try NonceService.extractNonceFromTokenResponse(token)
-            let jwt: String
-            do {
-                jwt = try await getProofJwt(
-                    proofBindingContext.toCredentialRequestProofMetadata(
-                        credentialIssuer: issuerMetadata.credentialIssuer,
-                        nonce: nonce
+
+            var proof: JWTProof? = nil
+
+            if !proofBindingContext.proofTypesSupported.isEmpty {
+
+                let nonce = try NonceService.extractNonceFromTokenResponse(token)
+
+                let jwt: String
+
+                do {
+                    jwt = try await getProofJwt(
+                        proofBindingContext.toCredentialRequestProofMetadata(
+                            credentialIssuer: issuerMetadata.credentialIssuer,
+                            nonce: nonce
+                        )
                     )
-                )
-            } catch {
-                throw DownloadFailedException("Failed to obtain proof JWT from callback: \(error.localizedDescription)")
+                } catch {
+                    throw DownloadFailedException(
+                        "Failed to obtain proof JWT from callback: \(error.localizedDescription)"
+                    )
+                }
+
+                proof = JWTProof(jwt: jwt)
             }
 
             return try await self.credentialExecutor.requestCredentialDraft13(
                 issuerMetadata: issuerMetadata,
                 credentialConfigurationId: credentialConfigurationId,
-                proof: JWTProof(jwt: jwt),
+                proof: proof,
                 accessToken: token.accessToken,
                 timeoutInMillis: downloadTimeoutInMillis,
                 tokenType: token.tokenType,
@@ -111,7 +135,6 @@ class PreAuthCodeFlowService {
 
         return response
     }
-
     private func executeRequestCredentials<Response>(
         issuerMetadata: IssuerMetadata,
         credentialOffer: CredentialOffer,
@@ -138,7 +161,8 @@ class PreAuthCodeFlowService {
 
             try dpopManager.initialize(
                 tokenEndpoint: tokenEndpoint,
-                authorizationServerSupportedAlgorithms: authServerMetadata.dpopSigningAlgValuesSupported
+                authorizationServerSupportedAlgorithms:
+                    authServerMetadata.dpopSigningAlgValuesSupported
             )
 
             guard let grant = credentialOffer.grants?.preAuthorizedGrant else {
@@ -149,7 +173,11 @@ class PreAuthCodeFlowService {
 
             let txCode: String? = try await {
                 if let txCodeObject = grant.txCode {
-                    return try await getTxCode?(txCodeObject.inputMode, txCodeObject.description, txCodeObject.length)
+                    return try await getTxCode?(
+                        txCodeObject.inputMode,
+                        txCodeObject.description,
+                        txCodeObject.length
+                    )
                 } else {
                     return nil
                 }
@@ -169,14 +197,15 @@ class PreAuthCodeFlowService {
                 dpopManager: dpopManager
             )
 
-
             guard let credential = try await requestCredential(token) else {
                 throw DownloadFailedException("Credential request failed.")
             }
 
             return credential
+
         } catch let e as DownloadFailedException {
             throw e
+
         } catch let e as VCIClientException {
             throw DownloadFailedException(
                 message: "Pre-Authorized Code Flow failed: \(e.message)",
@@ -184,6 +213,7 @@ class PreAuthCodeFlowService {
                 issuerErrorDescription: e.issuerErrorDescription,
                 cause: e
             )
+
         } catch {
             throw DownloadFailedException(
                 message: "Unexpected error during Pre-Authorized Code Flow: \(error.localizedDescription)",
@@ -191,5 +221,4 @@ class PreAuthCodeFlowService {
             )
         }
     }
-
 }

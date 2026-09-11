@@ -15,7 +15,7 @@ class CredentialRequestExecutor {
     func requestCredential(
         issuerMetadata: IssuerMetadata,
         credentialConfigurationId: String,
-        proofs: CredentialRequestProofs,
+        proofs: CredentialRequestProofs?,
         accessToken: String,
         timeoutInMillis: Int64 = 10000,
         session: NetworkManager = NetworkManager.shared,
@@ -134,7 +134,7 @@ class CredentialRequestExecutor {
     func requestCredentialDraft13(
         issuerMetadata: IssuerMetadata,
         credentialConfigurationId: String,
-        proof: Proof,
+        proof: Proof?,
         accessToken: String,
         timeoutInMillis: Int64 = 10000,
         session: NetworkManager = NetworkManager.shared,

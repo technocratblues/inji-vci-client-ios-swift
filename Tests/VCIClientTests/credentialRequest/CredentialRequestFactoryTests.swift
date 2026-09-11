@@ -52,4 +52,35 @@ final class CredentialRequestFactoryTests: XCTestCase {
         XCTAssertNil(json["doctype"])
         XCTAssertNil(json["vct"])
     }
+    
+    func testCreateCredentialRequest_withoutProofs_omitsProofs() throws {
+        let factory = CredentialRequestFactory()
+
+        let issuer = IssuerMetadata(
+            credentialIssuer: "https://issuer.example.com",
+            credentialEndpoint: "https://issuer.example.com/credential",
+            credentialType: ["VerifiableCredential"],
+            credentialFormat: .ldp_vc
+        )
+
+        let request = try factory.createCredentialRequest(
+            accessToken: "token",
+            issuer: issuer,
+            credentialConfigurationId: "UniversityDegreeCredential",
+            proofs: nil
+        )
+
+        let json = try XCTUnwrap(
+            try JSONSerialization.jsonObject(
+                with: XCTUnwrap(request.httpBody)
+            ) as? [String: Any]
+        )
+
+        XCTAssertEqual(
+            json["credential_configuration_id"] as? String,
+            "UniversityDegreeCredential"
+        )
+
+        XCTAssertNil(json["proofs"])
+    }
 }

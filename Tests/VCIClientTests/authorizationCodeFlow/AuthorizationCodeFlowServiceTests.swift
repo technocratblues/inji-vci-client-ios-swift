@@ -40,34 +40,101 @@ final class AuthorizationCodeFlowServiceTests: XCTestCase {
         XCTAssertEqual(result.credential.value as? String, "mock-credential")
     }
 
-    func test_requestCredentials_v1_success_usesNonceService() async throws {
+    func test_requestCredentials_v1_success_usesNonceServiceWhenHolderBindingSupported() async throws {
         let nonceService = MockNonceService()
         nonceService.nonceToReturn = "nonce-v1"
+
         let service = makeService(nonceService: nonceService)
         var capturedNonce: String?
 
+        let issuerMetadata = IssuerMetadata(
+            credentialIssuer: "https://issuer.example.com",
+            credentialEndpoint: "https://issuer.example.com/credential",
+            credentialFormat: .ldp_vc,
+            nonceEndpoint: "https://issuer.example.com/nonce"
+        )
+
         let result = try await service.requestCredentials(
-            issuerMetadata: IssuerMetadata(
-                credentialIssuer: "https://issuer.example.com",
-                credentialEndpoint: "https://issuer.example.com/credential",
-                credentialFormat: .ldp_vc,
-                nonceEndpoint: "https://issuer.example.com/nonce"
+            issuerMetadata: issuerMetadata,
+            clientMetadata: ClientMetadata(
+                clientId: "client123",
+                redirectUri: "app://redirect"
             ),
-            clientMetadata: ClientMetadata(clientId: "client123", redirectUri: "app://redirect"),
             authorizationMethods: [
-                .redirectToWeb(openWebPage: { _ in ["code": "mock-auth-code"] }),
+                .redirectToWeb(openWebPage: { _ in
+                    ["code": "mock-auth-code"]
+                }),
             ],
-            getTokenResponse: { _ in TokenResponse(accessToken: "mock-token", tokenType: "Bearer") },
+            getTokenResponse: { _ in
+                TokenResponse(
+                    accessToken: "mock-token",
+                    tokenType: "Bearer"
+                )
+            },
             getProofs: { proofRequest in
                 capturedNonce = proofRequest.nonce
-                return CredentialRequestProofs(proofs: ["mock-jwt"])
+
+                return CredentialRequestProofs(
+                    proofs: ["mock-jwt"]
+                )
             },
             credentialConfigurationId: "vc1",
-            proofBindingContext: ProofBindingContext(proofSigningAlgorithmsSupported: ["rs256"])
+            proofBindingContext: ProofBindingContext(
+                proofSigningAlgorithmsSupported: ["rs256"],
+                cryptographicBindingMethodsSupported: ["jwk"],
+                proofTypesSupported: ["jwt"]
+            )
         )
 
         XCTAssertEqual(capturedNonce, "nonce-v1")
         XCTAssertEqual(result.credentials?.count, 1)
+    }
+    
+    func test_requestCredentials_v1_withoutHolderBinding_doesNotGenerateProofs() async throws {
+        let executor = MockCredentialRequestExecutor()
+        let service = makeService(executor: executor)
+
+        var getProofsCalled = false
+
+        let issuerMetadata = IssuerMetadata(
+            credentialIssuer: "https://issuer.example.com",
+            credentialEndpoint: "https://issuer.example.com/credential",
+            credentialFormat: .ldp_vc
+        )
+
+        let result = try await service.requestCredentials(
+            issuerMetadata: issuerMetadata,
+            clientMetadata: ClientMetadata(
+                clientId: "client123",
+                redirectUri: "app://redirect"
+            ),
+            authorizationMethods: [
+                .redirectToWeb(openWebPage: { _ in
+                    ["code": "mock-auth-code"]
+                }),
+            ],
+            getTokenResponse: { _ in
+                TokenResponse(
+                    accessToken: "mock-token",
+                    tokenType: "Bearer"
+                )
+            },
+            getProofs: { _ in
+                getProofsCalled = true
+
+                return CredentialRequestProofs(
+                    proofs: ["jwt-should-not-be-generated"]
+                )
+            },
+            credentialConfigurationId: "vc1",
+            proofBindingContext: ProofBindingContext(
+                proofSigningAlgorithmsSupported: ["rs256"]
+            )
+        )
+
+        XCTAssertEqual(result.credentials?.count, 1)
+        XCTAssertFalse(getProofsCalled)
+        XCTAssertNil(executor.receivedProofs)
     }
 
     func test_missingAuthorizationEndpoint_shouldThrow() async {
@@ -356,19 +423,32 @@ final class AuthorizationCodeFlowServiceTests: XCTestCase {
 
         do {
             _ = try await service.requestCredentialsDraft13(
-                issuerMetadata: IssuerMetadata.mock(),
+                issuerMetadata: IssuerMetadata(
+                    credentialIssuer: "https://issuer.example.com",
+                    credentialEndpoint: "https://issuer.example.com/credential",
+                    credentialFormat: .ldp_vc,
+                    nonceEndpoint: "https://issuer.example.com/nonce"
+                ),
                 clientMetadata: ClientMetadata(clientId: "client123", redirectUri: "app://redirect"),
                 authorizationMethods: [
                     .redirectToWeb(openWebPage: { _ in ["code": "mock-auth-code"] }),
                 ],
                 getTokenResponse: { _ in TokenResponse.mock() },
-                getProofJwt: { _ in throw NSError(domain: "proof", code: 1) },
+                getProofJwt: { _ in
+                    throw NSError(domain: "proof", code: 1)
+                },
                 credentialConfigurationId: "vc1",
-                proofBindingContext: ProofBindingContext(proofSigningAlgorithmsSupported: ["rs256"])
+                proofBindingContext: ProofBindingContext(
+                    proofSigningAlgorithmsSupported: ["rs256"],
+                    cryptographicBindingMethodsSupported: ["jwk"],
+                    proofTypesSupported: ["jwt"]
+                )
             )
             XCTFail("Expected proof callback failure")
         } catch {
-            XCTAssertTrue(error.localizedDescription.contains("Failed to obtain proof JWT"))
+            XCTAssertTrue(
+                error.localizedDescription.contains("Failed to obtain proof JWT")
+            )
         }
     }
 

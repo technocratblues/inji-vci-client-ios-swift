@@ -43,7 +43,7 @@ final class CredentialRequestExecutorTests: XCTestCase {
             credentialFormat: CredentialFormat,
             accessToken: String,
             issuer: IssuerMetadata,
-            proofJwt: Proof
+            proofJwt: Proof?
         ) throws -> URLRequest {
             if shouldThrow {
                 throw DownloadFailedException("Simulated factory failure")
@@ -60,7 +60,7 @@ final class CredentialRequestExecutorTests: XCTestCase {
             accessToken: String,
             issuer: IssuerMetadata,
             credentialConfigurationId: String,
-            proofs: CredentialRequestProofs
+            proofs: CredentialRequestProofs?
         ) throws -> URLRequest {
             if shouldThrow {
                 throw DownloadFailedException("Simulated factory failure")
