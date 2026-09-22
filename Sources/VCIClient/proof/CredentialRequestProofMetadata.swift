@@ -37,6 +37,10 @@ struct ProofBindingContext {
         self.proofTypesSupported = proofTypesSupported
     }
 
+    func requiresProof() -> Bool {
+        !cryptographicBindingMethodsSupported.isEmpty &&
+        !proofTypesSupported.isEmpty
+    }
     func toCredentialRequestProofMetadata(credentialIssuer: String, nonce: String?) -> CredentialRequestProofMetadata {
         CredentialRequestProofMetadata(
             credentialIssuer: credentialIssuer,

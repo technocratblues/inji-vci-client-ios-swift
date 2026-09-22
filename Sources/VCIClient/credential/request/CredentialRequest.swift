@@ -3,7 +3,8 @@ import Foundation
 protocol CredentialRequestProtocol {
     init(accessToken: String,
          issuerMetaData: IssuerMetadata,
-         proof: JWTProof)
+         proof: JWTProof?
+    )
 
     func constructRequest() throws -> URLRequest
 

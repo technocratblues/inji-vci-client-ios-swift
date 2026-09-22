@@ -5,20 +5,19 @@ class CredentialRequestFactory {
         accessToken: String,
         issuer: IssuerMetadata,
         credentialConfigurationId: String,
-        proofs: CredentialRequestProofs
+        proofs: CredentialRequestProofs?
     ) throws -> URLRequest {
-        guard !proofs.isEmpty else {
-            throw InvalidDataProvidedException("Proof collection cannot be empty")
-        }
 
         var request = try constructBaseRequest(
             accessToken: accessToken,
             issuer: issuer
         )
+
         request.httpBody = try constructRequestBody(
             credentialConfigurationId: credentialConfigurationId,
             proofs: proofs
         )
+
         return request
     }
 
@@ -34,14 +33,16 @@ class CredentialRequestFactory {
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
         return request
     }
 
     func constructRequestBody(
         credentialConfigurationId: String,
-        proofs: CredentialRequestProofs
+        proofs: CredentialRequestProofs?
     ) throws -> Data {
         let encoder = JSONEncoder()
+
         return try encoder.encode(
             CredentialRequestBody(
                 credential_configuration_id: credentialConfigurationId,
@@ -51,8 +52,25 @@ class CredentialRequestFactory {
     }
 }
 
-
 private struct CredentialRequestBody: Encodable {
     let credential_configuration_id: String
-    let proofs: CredentialRequestProofs
+    let proofs: CredentialRequestProofs?
+
+    enum CodingKeys: String, CodingKey {
+        case credential_configuration_id
+        case proofs
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(
+            credential_configuration_id,
+            forKey: .credential_configuration_id
+        )
+
+        if let proofs {
+            try container.encode(proofs, forKey: .proofs)
+        }
+    }
 }

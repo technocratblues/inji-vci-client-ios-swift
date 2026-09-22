@@ -101,6 +101,8 @@ final class MockCredentialRequestExecutor: CredentialRequestExecutor {
     var shouldReturnNil = false
     var errorToThrow: Error?
     var shouldThrow: Bool = false
+    var receivedProofs: CredentialRequestProofs?
+    var receivedProofDraft13: Proof?
 
     init(shouldReturnNil: Bool = false) {
         self.shouldReturnNil = shouldReturnNil
@@ -109,13 +111,16 @@ final class MockCredentialRequestExecutor: CredentialRequestExecutor {
     override func requestCredential(
         issuerMetadata: IssuerMetadata,
         credentialConfigurationId: String,
-        proofs: CredentialRequestProofs,
+        proofs: CredentialRequestProofs?,
         accessToken: String,
         timeoutInMillis: Int64 = 10000,
         session: NetworkManager = NetworkManager.shared,
         tokenType: String? = nil,
         dpopManager: DPoPManager = DPoPManager()
     ) async throws -> CredentialResponse? {
+
+        receivedProofs = proofs
+
         if shouldReturnNil { return nil }
         if let errorToThrow {
             throw errorToThrow
@@ -131,17 +136,22 @@ final class MockCredentialRequestExecutor: CredentialRequestExecutor {
     override func requestCredentialDraft13(
         issuerMetadata: IssuerMetadata,
         credentialConfigurationId: String,
-        proof: Proof,
+        proof: Proof?,
         accessToken: String,
         timeoutInMillis: Int64 = 10000,
         session: NetworkManager = NetworkManager.shared,
         tokenType: String? = nil,
         dpopManager: DPoPManager = DPoPManager()
     ) async throws -> CredentialResponseDraft13? {
+
+        receivedProofDraft13 = proof
+
         if shouldReturnNil { return nil }
+
         if let errorToThrow {
             throw errorToThrow
         }
+
         if shouldThrow {
             throw DownloadFailedException("test-error: credential request failed")
         }
@@ -305,7 +315,7 @@ final class MockPKCESessionManager: PKCESessionManager {
 }
 
 class MockValidCredentialRequest: CredentialRequestProtocol {
-    required init(accessToken: String, issuerMetaData: IssuerMetadata, proof: JWTProof) {
+    required init(accessToken: String, issuerMetaData: IssuerMetadata, proof: JWTProof?) {
     }
 
     func validateIssuerMetadata() -> ValidatorResult {
@@ -349,7 +359,7 @@ class MockInteractiveAuthorizationHandler: InteractiveAuthorizationHandler {
 }
 
 class MockInvalidCredentialRequest: CredentialRequestProtocol {
-    required init(accessToken: String, issuerMetaData: IssuerMetadata, proof: JWTProof) {
+    required init(accessToken: String, issuerMetaData: IssuerMetadata, proof: JWTProof?) {
     }
 
     func validateIssuerMetadata() -> ValidatorResult {
